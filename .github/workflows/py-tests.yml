@@ -9,6 +9,13 @@ on:
     branches:
       - main
   pull_request:
+    paths:
+      - 'openhands/**'
+      - 'tests/**'
+      - 'evaluation/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - '.github/workflows/py-tests.yml'
 
 # If triggered by a PR, it will be in the same group. However, each commit on main will be in its own unique group
 concurrency:
@@ -48,11 +55,11 @@ jobs:
       - name: Build Environment
         run: make build
       - name: Run Unit Tests
-        run: poetry run pytest --forked -n auto -svv ./tests/unit
+        run: PYTHONPATH=".:$PYTHONPATH" poetry run pytest --forked -n auto -svv ./tests/unit
       - name: Run Runtime Tests with CLIRuntime
-        run: TEST_RUNTIME=cli poetry run pytest -svv tests/runtime/test_bash.py
+        run: PYTHONPATH=".:$PYTHONPATH" TEST_RUNTIME=cli poetry run pytest -svv tests/runtime/test_bash.py
       - name: Run E2E Tests
-        run: poetry run pytest -svv tests/e2e
+        run: PYTHONPATH=".:$PYTHONPATH" poetry run pytest -svv tests/e2e
 
   # Run specific Windows python tests
   test-on-windows:
@@ -77,9 +84,11 @@ jobs:
       - name: Run Windows unit tests
         run: poetry run pytest -svv tests/unit/test_windows_bash.py
         env:
+          PYTHONPATH: ".;$env:PYTHONPATH"
           DEBUG: "1"
       - name: Run Windows runtime tests with LocalRuntime
         run: $env:TEST_RUNTIME="local"; poetry run pytest -svv tests/runtime/test_bash.py
         env:
+          PYTHONPATH: ".;$env:PYTHONPATH"
           TEST_RUNTIME: local
           DEBUG: "1"

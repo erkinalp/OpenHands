@@ -19,11 +19,13 @@ from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import MessageAction
 from openhands.events.nested_event_store import NestedEventStore
 from openhands.events.stream import EventStream
+from openhands.experiments.experiment_manager import ExperimentManagerImpl
 from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, ProviderHandler
 from openhands.llm.llm import LLM
 from openhands.runtime import get_runtime_cls
 from openhands.runtime.impl.docker.docker_runtime import DockerRuntime
 from openhands.server.config.server_config import ServerConfig
+from openhands.server.constants import ROOM_KEY
 from openhands.server.conversation_manager.conversation_manager import (
     ConversationManager,
 )
@@ -31,7 +33,7 @@ from openhands.server.data_models.agent_loop_info import AgentLoopInfo
 from openhands.server.monitoring import MonitoringListener
 from openhands.server.session.conversation import ServerConversation
 from openhands.server.session.conversation_init_data import ConversationInitData
-from openhands.server.session.session import ROOM_KEY, Session
+from openhands.server.session.session import Session
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 from openhands.storage.data_models.conversation_status import ConversationStatus
@@ -468,24 +470,30 @@ class DockerNestedConversationManager(ConversationManager):
     ) -> DockerRuntime:
         # This session is created here only because it is the easiest way to get a runtime, which
         # is the easiest way to create the needed docker container
+
+        # Run experiment manager variant test before creating session
+        config: OpenHandsConfig = ExperimentManagerImpl.run_config_variant_test(
+            user_id, sid, self.config
+        )
+
         session = Session(
             sid=sid,
             file_store=self.file_store,
-            config=self.config,
+            config=config,
             sio=self.sio,
             user_id=user_id,
         )
-        agent_cls = settings.agent or self.config.default_agent
+        agent_cls = settings.agent or config.default_agent
         agent_name = agent_cls if agent_cls is not None else 'agent'
         llm = LLM(
-            config=self.config.get_llm_config_from_agent(agent_name),
+            config=config.get_llm_config_from_agent(agent_name),
             retry_listener=session._notify_on_llm_retry,
         )
         llm = session._create_llm(agent_cls)
-        agent_config = self.config.get_agent_config(agent_cls)
+        agent_config = config.get_agent_config(agent_cls)
         agent = Agent.get_cls(agent_cls)(llm, agent_config)
 
-        config = self.config.model_copy(deep=True)
+        config = config.model_copy(deep=True)
         env_vars = config.sandbox.runtime_startup_env_vars
         env_vars['CONVERSATION_MANAGER_CLASS'] = (
             'openhands.server.conversation_manager.standalone_conversation_manager.StandaloneConversationManager'
